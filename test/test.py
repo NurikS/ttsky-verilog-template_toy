@@ -1,40 +1,44 @@
-# SPDX-FileCopyrightText: © 2024 Tiny Tapeout
-# SPDX-License-Identifier: Apache-2.0
-
 import cocotb
-from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles
+from cocotb.triggers import Timer
 
 
 @cocotb.test()
 async def test_project(dut):
-    dut._log.info("Start")
+    dut._log.info("Testing 8-bit AND circuit")
 
-    # Set the clock period to 10 us (100 KHz)
-    clock = Clock(dut.clk, 10, unit="us")
-    cocotb.start_soon(clock.start())
-
-    # Reset
-    dut._log.info("Reset")
     dut.ena.value = 1
-    dut.ui_in.value = 0
-    dut.uio_in.value = 0
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
+    dut.clk.value = 0
     dut.rst_n.value = 1
 
-    dut._log.info("Test project behavior")
+    test_cases = [
+        (0x00, 0x00),
+        (0xFF, 0xFF),
+        (0xFF, 0x00),
+        (0xAA, 0x55),
+        (0x36, 0x1C),
+        (0x0F, 0x33),
+        (0x81, 0x81),
+        (0xF0, 0x0F),
+    ]
 
-    # Set the input values you want to test
-    dut.ui_in.value = 20
-    dut.uio_in.value = 30
+    for a, b in test_cases:
+        dut.ui_in.value = a
+        dut.uio_in.value = b
 
-    # Wait for one clock cycle to see the output values
-    await ClockCycles(dut.clk, 1)
+        # Allow combinational logic to settle
+        await Timer(2, unit="ns")
 
-    # The following assersion is just an example of how to check the output values.
-    # Change it to match the actual expected output of your module:
-    assert dut.uo_out.value == 50
+        expected = a & b
+        actual = int(dut.uo_out.value)
 
-    # Keep testing the module by changing the input values, waiting for
-    # one or more clock cycles, and asserting the expected output values.
+        dut._log.info(
+            f"{a:#04x} AND {b:#04x} = "
+            f"{actual:#04x} (expected {expected:#04x})"
+        )
+
+        assert actual == expected, (
+            f"Failed: {a:#04x} AND {b:#04x}: "
+            f"got {actual:#04x}, expected {expected:#04x}"
+        )
+
+    dut._log.info("All AND tests passed!")
